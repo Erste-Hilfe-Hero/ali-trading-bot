@@ -1,4 +1,5 @@
 {
+  "stoploss": -0.15,
   "pairlists": [
     {"method": "VolumePairList", "number_assets": 20, "sort_key": "quoteVolume", "min_value": 10000000, "refresh_period": 1800},
     {"method": "AgeFilter", "min_days_listed": 30},
