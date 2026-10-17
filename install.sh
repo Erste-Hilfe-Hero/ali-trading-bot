@@ -76,7 +76,8 @@ fi
 
 # Echtgeld nur, wenn LIVE_TRADING=true gesetzt ist UND ein Binance-Key vorhanden ist
 MODE="TESTMODUS (kein echtes Geld)"
-if [ "${LIVE_TRADING:-}" = "true" ] && grep -q '^FREQTRADE__EXCHANGE__KEY=.' .env; then
+LIVE_NORM=$(printf "%s" "${LIVE_TRADING:-}" | tr -d "[:space:]" | tr "[:upper:]" "[:lower:]")
+if [ "$LIVE_NORM" = "true" ] && grep -q '^FREQTRADE__EXCHANGE__KEY=.' .env; then
   set_env FREQTRADE__DRY_RUN false
   MODE="ECHTGELD"
 else
