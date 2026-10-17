@@ -35,17 +35,29 @@ chmod -R a+rwX user_data
 # 3. .env anlegen (nur beim ersten Mal)
 if [ ! -f .env ]; then
   cp .env.example .env
-  echo
+  chmod 600 .env
+fi
+
+set_env() {
+  if grep -q "^$1=" .env; then sed -i "s|^$1=.*|$1=$2|" .env; else echo "$1=$2" >> .env; fi
+}
+
+# Telegram: aus Umgebung (GitHub-Secrets) oder interaktiv, falls noch nicht gesetzt
+if [ -z "${TG_TOKEN:-}" ] && ! grep -q '^FREQTRADE__TELEGRAM__TOKEN=.' .env; then
   echo "Telegram einrichten (Enter drücken zum Überspringen):"
   read -r -p "  Telegram-Bot-Token von @BotFather: " TG_TOKEN < /dev/tty || true
   read -r -p "  Deine Chat-ID von @userinfobot:    " TG_CHAT < /dev/tty || true
-  sed -i "s|^FREQTRADE__TELEGRAM__TOKEN=.*|FREQTRADE__TELEGRAM__TOKEN=${TG_TOKEN:-}|" .env
-  sed -i "s|^FREQTRADE__TELEGRAM__CHAT_ID=.*|FREQTRADE__TELEGRAM__CHAT_ID=${TG_CHAT:-}|" .env
-  if [ -z "${TG_TOKEN:-}" ]; then
-    sed -i 's/"enabled": true/"enabled": false/' user_data/config.json
-    echo "  (Telegram ist aus. Später in .env eintragen und in user_data/config.json enabled auf true setzen.)"
-  fi
-  chmod 600 .env
+fi
+if [ -n "${TG_TOKEN:-}" ] && [ -n "${TG_CHAT:-}" ]; then
+  set_env FREQTRADE__TELEGRAM__TOKEN "$TG_TOKEN"
+  set_env FREQTRADE__TELEGRAM__CHAT_ID "$TG_CHAT"
+  echo "-> Telegram eingerichtet"
+fi
+if grep -q '^FREQTRADE__TELEGRAM__TOKEN=.' .env; then
+  set_env FREQTRADE__TELEGRAM__ENABLED true
+else
+  set_env FREQTRADE__TELEGRAM__ENABLED false
+  echo "  (Telegram ist aus.)"
 fi
 
 # 4. Starten (Testmodus, kein echtes Geld)
