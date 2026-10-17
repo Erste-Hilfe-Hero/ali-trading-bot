@@ -70,7 +70,7 @@ fi
 # 4. Starten (Testmodus, kein echtes Geld)
 echo "-> Starte Bot im Testmodus ..."
 docker compose pull
-docker compose up -d
+docker compose up -d --force-recreate
 
 echo
 echo "Fertig. Der Bot läuft im TESTMODUS (kein echtes Geld)."
