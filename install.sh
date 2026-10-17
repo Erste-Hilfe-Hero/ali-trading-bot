@@ -28,6 +28,13 @@ else
   git clone --depth 1 -b "$BRANCH" "$REPO" "$SRC"
 fi
 cd "$DIR"
+
+# Immer die frisch geholte Version aus dem Repo ausfuehren, nicht eine evtl. veraltete Download-Kopie
+if [ -z "${ALI_REEXEC:-}" ]; then
+  export ALI_REEXEC=1
+  exec bash "$DIR/install.sh" "$@"
+fi
+
 mkdir -p user_data/logs
 # Container laeuft intern als anderer Benutzer -> Schreibrechte fuer user_data
 chmod -R a+rwX user_data 2>/dev/null || true
