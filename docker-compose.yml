@@ -10,6 +10,5 @@ services:
       trade
       --logfile /freqtrade/user_data/logs/freqtrade.log
       --config /freqtrade/user_data/config.json
+      --config /freqtrade/user_data/config-extra.json
       --strategy MomentumBreakout
-
-      Žao nam je, ovaj proizvod nije dostupan. Odaberite drugu kombinaciju.
