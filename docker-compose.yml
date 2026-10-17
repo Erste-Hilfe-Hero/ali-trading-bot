@@ -1,0 +1,13 @@
+services:
+  freqtrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: ali-trading-bot
+    restart: unless-stopped
+    env_file: .env
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/freqtrade.log
+      --config /freqtrade/user_data/config.json
+      --strategy MomentumBreakout
