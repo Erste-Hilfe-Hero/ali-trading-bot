@@ -56,6 +56,9 @@ class MomentumBreakout(IStrategy):
             {"method": "MaxDrawdown", "lookback_period_candles": 168, "trade_limit": 5,
              "stop_duration_candles": 48, "max_allowed_drawdown": 0.15},
             {"method": "CooldownPeriod", "stop_duration_candles": 2},
+            # Coin mit 2 Verlust-Trades in 72h -> 48h gesperrt
+            {"method": "LowProfitPairs", "lookback_period_candles": 72, "trade_limit": 2,
+             "stop_duration_candles": 48, "required_profit": 0.0},
         ]
 
     def informative_pairs(self):
