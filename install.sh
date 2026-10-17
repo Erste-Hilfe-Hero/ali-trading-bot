@@ -67,12 +67,28 @@ else
   echo "  (Telegram ist aus.)"
 fi
 
-# 4. Starten (Testmodus, kein echtes Geld)
-echo "-> Starte Bot im Testmodus ..."
+# Binance-Zugang (aus GitHub-Secrets)
+if [ -n "${BINANCE_KEY:-}" ] && [ -n "${BINANCE_SECRET:-}" ]; then
+  set_env FREQTRADE__EXCHANGE__KEY "$BINANCE_KEY"
+  set_env FREQTRADE__EXCHANGE__SECRET "$BINANCE_SECRET"
+  echo "-> Binance-Zugang eingerichtet"
+fi
+
+# Echtgeld nur, wenn LIVE_TRADING=true gesetzt ist UND ein Binance-Key vorhanden ist
+MODE="TESTMODUS (kein echtes Geld)"
+if [ "${LIVE_TRADING:-}" = "true" ] && grep -q '^FREQTRADE__EXCHANGE__KEY=.' .env; then
+  set_env FREQTRADE__DRY_RUN false
+  MODE="ECHTGELD"
+else
+  set_env FREQTRADE__DRY_RUN true
+fi
+
+# 4. Starten
+echo "-> Starte Bot im Modus: $MODE ..."
 docker compose pull
 docker compose up -d --force-recreate
 
 echo
-echo "Fertig. Der Bot läuft im TESTMODUS (kein echtes Geld)."
+echo "Fertig. Der Bot läuft im Modus: $MODE"
 echo "Logs ansehen:   cd $DIR && docker compose logs -f"
 echo "Telegram:       schreib deinem Bot /status"

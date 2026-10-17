@@ -1,0 +1,39 @@
+name: Ali Trading Bot auf Contabo installieren
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: trading-bot-deploy
+  cancel-in-progress: false
+jobs:
+  deploy:
+    runs-on: self-hosted
+    timeout-minutes: 25
+    steps:
+      - name: Vorabcheck
+        shell: bash
+        run: |
+          echo "Runner-Benutzer: $(whoami)  Home: $HOME"
+          command -v git && git --version
+          docker --version
+          docker compose version
+      - name: Bot installieren und starten (Testmodus)
+        shell: bash
+        env:
+          TG_TOKEN: ${{ secrets.TG_TOKEN }}
+          TG_CHAT: ${{ secrets.TG_CHAT_ID }}
+          BINANCE_KEY: ${{ secrets.BINANCE_KEY }}
+          BINANCE_SECRET: ${{ secrets.BINANCE_SECRET }}
+          LIVE_TRADING: ${{ secrets.LIVE_TRADING }}
+        run: |
+          set -euo pipefail
+          curl -fsSL https://raw.githubusercontent.com/Erste-Hilfe-Hero/ali-trading-bot/main/install.sh -o "$RUNNER_TEMP/ali-install.sh"
+          bash "$RUNNER_TEMP/ali-install.sh" </dev/null
+      - name: Status nach 90 Sekunden
+        shell: bash
+        run: |
+          sleep 90
+          cd "$HOME/ali-trading-bot-src"
+          docker compose ps
+          docker compose logs --tail 40
