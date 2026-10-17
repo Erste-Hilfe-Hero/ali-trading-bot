@@ -29,6 +29,8 @@ else
 fi
 cd "$DIR"
 mkdir -p user_data/logs
+# Container laeuft intern als anderer Benutzer -> Schreibrechte fuer user_data
+chmod -R a+rwX user_data
 
 # 3. .env anlegen (nur beim ersten Mal)
 if [ ! -f .env ]; then
