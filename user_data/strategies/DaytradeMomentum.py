@@ -35,10 +35,10 @@ KILL_FILE = USER_DATA / "KILL"
 
 DEFAULT_RISK = {
     "risk_per_trade": 0.005,
-    "max_stake_ratio": 0.25,
+    "max_stake_ratio": 0.2,
     "daily_loss_limit": 0.02,
     "daily_profit_target": 0.0,
-    "max_trades_per_day": 20,
+    "max_trades_per_day": 50,
     "atr_stop_mult": 1.5,
     "atr_target_mult": 3.0,
     "max_trade_minutes": 180,
@@ -234,3 +234,4 @@ class DaytradeMomentum(IStrategy):
             logger.info("Max. Trades pro Tag erreicht, kein Einstieg in %s", pair)
             return False
         return True
+

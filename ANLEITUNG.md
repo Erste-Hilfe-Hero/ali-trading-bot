@@ -78,6 +78,8 @@ Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstren
 - **Schutzschalter:** 4 Stops in 2h → 2h Pause, 5 % Drawdown in 24h → 12h Pause.
 - Alle Werte in `user_data/daytrade-risk.json`, nach Änderung `./daytrade.sh start`.
 
+**Strategien:** `DaytradeConfluence` (Standard: jeder Einstieg prüft 9 Signale, Einsatz je nach Signalstärke 0,7x bis 1,3x), `DaytradeMomentum`, `DaytradeMeanRevert`. Die aktive steht in `user_data/daytrade-strategy.txt`. Bis 10 Trades gleichzeitig, bis 50 pro Tag.
+
 Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Hauptbot bleibt unberührt.
 
 ### Werkzeuge
@@ -90,6 +92,8 @@ Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Ha
 | `./daytrade.sh unkill` | Kill-Switch aus |
 | `./daytrade.sh stop` | Container anhalten |
 | `./daytrade.sh backtest 60` | Backtest über die letzten 60 Tage |
+| `./daytrade.sh select 30` | testet alle Strategien, merkt sich die beste |
+| `./daytrade.sh learn 90 300` | **Selbstlernen:** optimiert, übernimmt nur wenn auf ungesehenen Daten besser und im Plus (Log: `user_data/logs/learn.log`) |
 | `./daytrade.sh check` | prüft die Strategie auf Lookahead-Fehler |
 | `./daytrade.sh hyperopt 90 300` | optimiert die Einstiegsfilter auf 2/3 der Daten, testet auf dem letzten Drittel, speichert nur einen Vorschlag |
 | `./daytrade.sh apply-params` | Vorschlag übernehmen (danach `start`) |

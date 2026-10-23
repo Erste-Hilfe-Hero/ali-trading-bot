@@ -8,3 +8,4 @@ __pycache__/
 .env.daytrade
 user_data/KILL
 user_data/strategies/*.json*
+user_data/daytrade-strategy.txt

@@ -1,7 +1,7 @@
 {
   "bot_name": "ali-daytrade",
-  "strategy": "DaytradeMomentum",
-  "max_open_trades": 4,
+  "strategy": "DaytradeConfluence",
+  "max_open_trades": 10,
   "stake_currency": "USDT",
   "stake_amount": "unlimited",
   "tradable_balance_ratio": 0.95,

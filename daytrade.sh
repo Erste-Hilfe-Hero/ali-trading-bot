@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Daytrader steuern:
 #   start | stop | kill | unkill | status | logs | report
-#   backtest [tage] | check [tage] | hyperopt [tage] [epochen] | apply-params
+#   backtest [tage] [strategie] | select [tage] | check [tage]
+#   hyperopt [tage] [epochen] | apply-params | learn [tage] [epochen]
 #   paper | live
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -12,7 +13,12 @@ MAIN_ENV="${MAIN_ENV:-$HOME/ali-trading-bot-src/.env}"
 UD=/freqtrade/user_data
 CFG="--config $UD/config-daytrade.json"
 BT_CFG="$CFG --config $UD/config-daytrade-backtest.json"
-PARAMS=user_data/strategies/DaytradeMomentum.json
+STRATEGIES="DaytradeConfluence DaytradeMomentum DaytradeMeanRevert"
+STRAT_FILE=user_data/daytrade-strategy.txt
+STRATEGY=$(cat "$STRAT_FILE" 2>/dev/null || echo DaytradeConfluence)
+export DT_STRATEGY="$STRATEGY"
+PARAMS="user_data/strategies/$STRATEGY.json"
+RUN="docker run --rm -v $PWD/user_data:$UD $FT_IMG"
 
 set_env() {
   if grep -q "^$1=" "$ENVF"; then sed -i "s|^$1=.*|$1=$2|" "$ENVF"; else echo "$1=$2" >> "$ENVF"; fi
@@ -57,6 +63,18 @@ download() {
     --timerange "$(date -u -d "-$((days + 3)) days" +%Y%m%d)-"
 }
 
+# Gesamtgewinn (Anteil) des letzten Backtests einer Strategie
+last_profit() {
+  docker run --rm -v "$PWD/user_data:$UD" --entrypoint python3 "$FT_IMG" -c \
+    "from freqtrade.data.btanalysis import load_backtest_stats as l; print(l('$UD/backtest_results')['strategy']['$1']['profit_total'])"
+}
+
+bt() {  # bt <strategie> <timerange> [extra args]
+  local st="$1" tr="$2"; shift 2
+  $RUN backtesting $BT_CFG --strategy "$st" --timerange "$tr" --cache none "$@" 2>&1 | grep -vE " - INFO - |━━" | tail -45
+  echo "ERGEBNIS $st: $(last_profit "$st")"
+}
+
 mode() { [ "$(get_env FREQTRADE__DRY_RUN)" = "false" ] && echo "ECHTGELD" || echo "TESTMODUS"; }
 
 case "${1:-status}" in
@@ -66,7 +84,7 @@ case "${1:-status}" in
   stop)   $DC stop ;;
   kill)   touch user_data/KILL; echo "Kill-Switch aktiv: keine neuen Trades, offene werden verkauft." ;;
   unkill) rm -f user_data/KILL; echo "Kill-Switch aus." ;;
-  status) $DC ps; echo "Modus: $(mode)"; tail -n 30 user_data/logs/daytrade.log 2>/dev/null || true ;;
+  status) $DC ps; echo "Modus: $(mode)  Strategie: $STRATEGY"; tail -n 30 user_data/logs/daytrade.log 2>/dev/null || true ;;
   logs)   $DC logs -f --tail 100 ;;
   report)
     echo "Modus: $(mode)"; [ -f user_data/KILL ] && echo "Kill-Switch: AKTIV"
@@ -75,9 +93,17 @@ case "${1:-status}" in
     echo "== Offene Trades";   api status | python3 -m json.tool
     echo "== Kontostand";      api balance | python3 -c 'import json,sys; b=json.load(sys.stdin); print(b["total"], b["stake"])' ;;
   backtest)
+    DAYS="${2:-30}"; ST="${3:-$STRATEGY}"; ensure_env; download "$DAYS"
+    bt "$ST" "$(date -u -d "-${DAYS} days" +%Y%m%d)-" --breakdown day ;;
+  select)
+    # Testet alle Strategien und merkt sich die beste (aktiv nach dem naechsten start)
     DAYS="${2:-30}"; ensure_env; download "$DAYS"
-    docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" backtesting $BT_CFG --strategy DaytradeMomentum \
-      --timerange "$(date -u -d "-${DAYS} days" +%Y%m%d)-" --breakdown day --cache none ;;
+    TR="$(date -u -d "-${DAYS} days" +%Y%m%d)-"; BEST=""; BESTP=-9
+    for st in $STRATEGIES; do
+      bt "$st" "$TR" >/dev/null; P=$(last_profit "$st"); echo "$st: $P"
+      if python3 -c "import sys; sys.exit(0 if $P > $BESTP else 1)"; then BEST=$st; BESTP=$P; fi
+    done
+    echo "$BEST" > "$STRAT_FILE"; echo "BESTE=$BEST GEWINN=$BESTP" ;;
   hyperopt)
     # Optimiert auf den ersten 2/3 des Zeitraums, prueft danach auf dem letzten Drittel,
     # das der Optimierer nie gesehen hat. Ergebnis wird nur ein Vorschlag (apply-params).
@@ -85,11 +111,10 @@ case "${1:-status}" in
     START=$(date -u -d "-${DAYS} days" +%Y%m%d)
     SPLIT=$(date -u -d "-$((DAYS / 3)) days" +%Y%m%d)
     [ -f "$PARAMS" ] && mv "$PARAMS" "$PARAMS.active"
-    RUN="docker run --rm -v $PWD/user_data:$UD $FT_IMG"
-    $RUN hyperopt $BT_CFG --strategy DaytradeMomentum --spaces buy --hyperopt-loss SharpeHyperOptLossDaily \
+    $RUN hyperopt $BT_CFG --strategy "$STRATEGY" --spaces buy --hyperopt-loss SharpeHyperOptLossDaily \
       -e "$EPOCHS" --timerange "${START}-${SPLIT}" -j 2
     echo "== Test auf ungesehenen Daten (${SPLIT} bis heute)"
-    $RUN backtesting $BT_CFG --strategy DaytradeMomentum --timerange "${SPLIT}-" --cache none
+    bt "$STRATEGY" "${SPLIT}-"
     [ -f "$PARAMS" ] && mv "$PARAMS" "$PARAMS.candidate"
     [ -f "$PARAMS.active" ] && mv "$PARAMS.active" "$PARAMS"
     echo "Vorschlag gespeichert in $PARAMS.candidate. Uebernehmen mit: $0 apply-params" ;;
@@ -97,8 +122,27 @@ case "${1:-status}" in
     # Prueft die Strategie auf Blick-in-die-Zukunft-Fehler (Lookahead) und instabile Indikatoren
     DAYS="${2:-30}"; ensure_env; download "$DAYS"
     TR="$(date -u -d "-${DAYS} days" +%Y%m%d)-"
-    docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" lookahead-analysis $BT_CFG --strategy DaytradeMomentum --timerange "$TR"
-    docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" recursive-analysis $BT_CFG --strategy DaytradeMomentum --timerange "$TR" ;;
+    docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" lookahead-analysis $BT_CFG --strategy "$STRATEGY" --timerange "$TR"
+    docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" recursive-analysis $BT_CFG --strategy "$STRATEGY" --timerange "$TR" ;;
+  learn)
+    # Selbstlernen: optimiert die Einstiegsfilter auf 2/3 der Daten und uebernimmt sie nur,
+    # wenn sie auf dem letzten Drittel (ungesehen) besser sind als die aktuellen UND im Plus.
+    # Risikowerte (daytrade-risk.json), Kill-Switch und "kein Hebel" fasst das nie an.
+    DAYS="${2:-90}"; EPOCHS="${3:-300}"; ensure_env; download "$DAYS"
+    START=$(date -u -d "-${DAYS} days" +%Y%m%d); SPLIT=$(date -u -d "-$((DAYS / 3)) days" +%Y%m%d)
+    bt "$STRATEGY" "${SPLIT}-" >/dev/null; P0=$(last_profit "$STRATEGY")
+    [ -f "$PARAMS" ] && cp "$PARAMS" "$PARAMS.active"
+    $RUN hyperopt $BT_CFG --strategy "$STRATEGY" --spaces buy --hyperopt-loss SharpeHyperOptLossDaily \
+      -e "$EPOCHS" --timerange "${START}-${SPLIT}" -j 2 2>&1 | grep -vE " - INFO - " | tail -20
+    bt "$STRATEGY" "${SPLIT}-" >/dev/null; P1=$(last_profit "$STRATEGY")
+    MSG="$(date -u +%F) $STRATEGY ungesehen: aktuell=$P0 neu=$P1"
+    if python3 -c "import sys; sys.exit(0 if $P1 > max($P0, 0) else 1)"; then
+      rm -f "$PARAMS.active"; echo "$MSG -> uebernommen" | tee -a user_data/logs/learn.log
+      $DC up -d --force-recreate
+    else
+      if [ -f "$PARAMS.active" ]; then mv "$PARAMS.active" "$PARAMS"; else rm -f "$PARAMS"; fi
+      echo "$MSG -> verworfen" | tee -a user_data/logs/learn.log
+    fi ;;
   apply-params)
     [ -f "$PARAMS.candidate" ] || { echo "Kein Vorschlag vorhanden."; exit 1; }
     mv "$PARAMS.candidate" "$PARAMS"; echo "Parameter uebernommen. Neustart mit: $0 start" ;;

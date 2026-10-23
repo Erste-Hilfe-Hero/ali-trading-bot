@@ -16,4 +16,4 @@ services:
       trade
       --logfile /freqtrade/user_data/logs/daytrade.log
       --config /freqtrade/user_data/config-daytrade.json
-      --strategy DaytradeMomentum
+      --strategy ${DT_STRATEGY:-DaytradeConfluence}
