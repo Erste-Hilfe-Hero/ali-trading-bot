@@ -13,7 +13,7 @@ MAIN_ENV="${MAIN_ENV:-$HOME/ali-trading-bot-src/.env}"
 UD=/freqtrade/user_data
 CFG="--config $UD/config-daytrade.json"
 BT_CFG="$CFG --config $UD/config-daytrade-backtest.json"
-STRATEGIES="DaytradeMomentum DaytradeConfluence DaytradeMeanRevert DaytradeBreakout DaytradeTrend15m DaytradeRsi2 DaytradeVwapBounce DaytradeSqueeze DaytradeMacdCross DaytradeSupertrend DaytradeHeikinAshi DaytradeStochRsi DaytradeEmaRibbon"
+STRATEGIES=$(cd user_data/strategies && ls Daytrade*.py | sed 's/\.py$//' | tr '\n' ' ')
 STRAT_FILE=user_data/daytrade-strategy.txt
 STRATEGY=$(cat "$STRAT_FILE" 2>/dev/null || echo DaytradeConfluence)
 export DT_STRATEGY="$STRATEGY"
@@ -59,7 +59,7 @@ api() {
 
 download() {
   local days="$1"
-  docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" download-data $BT_CFG -t 5m 15m 1h \
+  docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" download-data $BT_CFG -t 1m 5m 15m 1h \
     --timerange "$(date -u -d "-$((days + 3)) days" +%Y%m%d)-"
 }
 
