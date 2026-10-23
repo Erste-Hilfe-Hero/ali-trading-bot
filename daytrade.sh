@@ -30,8 +30,8 @@ case "${1:-status}" in
     START=$(date -u -d "-$((DAYS + 3)) days" +%Y%m%d)
     BT=$(date -u -d "-${DAYS} days" +%Y%m%d)
     RUN="docker run --rm -v $PWD/user_data:/freqtrade/user_data $FT_IMG"
-    $RUN download-data --config /freqtrade/user_data/config-daytrade.json -t 5m 15m 1h --timerange "${START}-"
-    $RUN backtesting --config /freqtrade/user_data/config-daytrade.json --strategy DaytradeMomentum \
+    $RUN download-data --config /freqtrade/user_data/config-daytrade.json --config /freqtrade/user_data/config-daytrade-backtest.json -t 5m 15m 1h --timerange "${START}-"
+    $RUN backtesting --config /freqtrade/user_data/config-daytrade.json --config /freqtrade/user_data/config-daytrade-backtest.json --strategy DaytradeMomentum \
       --timerange "${BT}-" --breakdown day --cache none ;;
   *) echo "Benutzung: $0 start|stop|kill|unkill|status|logs|backtest [tage]"; exit 1 ;;
 esac

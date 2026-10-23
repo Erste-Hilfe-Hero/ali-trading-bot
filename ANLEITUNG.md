@@ -67,6 +67,8 @@ Erst nach **mindestens 1–2 Wochen Testmodus**, wenn die Telegram-Meldungen Sin
 Jeder Verkauf innerhalb eines Jahres nach Kauf ist steuerpflichtig. Mit `/profit` und einem Export aus Binance (Blockpit, CoinTracking) behältst du den Überblick. Keine Steuerberatung.
 
 ## Daytrader (zweiter Bot, 5m-Kerzen)
+Handelt dieselben Coins wie der Hauptbot (Top 50 nach Volumen, gleiche Filter und Sperrliste; der Backtest nutzt eine feste Liste von 30 liquiden Coins in `config-daytrade-backtest.json`, weil Freqtrade die Volumen-Liste im Backtest nicht kann).
+
 Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstrend ist und BTC auf 15m nicht fällt, und zwar wenn auf 5m EMA9 über EMA21 kreuzt, der Kurs über dem Tages-VWAP liegt und das Volumen erhöht ist.
 
 - **Stop:** 1,5 × ATR unter Einstieg, auf Binance platziert. Ab +1R wird der Stop auf Einstand gezogen.
