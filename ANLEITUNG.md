@@ -65,3 +65,26 @@ Erst nach **mindestens 1–2 Wochen Testmodus**, wenn die Telegram-Meldungen Sin
 
 ## Steuer-Hinweis (Deutschland)
 Jeder Verkauf innerhalb eines Jahres nach Kauf ist steuerpflichtig. Mit `/profit` und einem Export aus Binance (Blockpit, CoinTracking) behältst du den Überblick. Keine Steuerberatung.
+
+## Daytrader (zweiter Bot, 5m-Kerzen)
+Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstrend ist und BTC auf 15m nicht fällt, und zwar wenn auf 5m EMA9 über EMA21 kreuzt, der Kurs über dem Tages-VWAP liegt und das Volumen erhöht ist.
+
+- **Stop:** 1,5 × ATR unter Einstieg, auf Binance platziert. Ab +1R wird der Stop auf Einstand gezogen.
+- **Ziel:** 3 × ATR (Chance/Risiko 1:2). Spätestens nach 3 Stunden wird verkauft.
+- **Positionsgröße:** so berechnet, dass ein Stop 0,5 % des Kapitals kostet, max. 25 % des Kapitals pro Trade.
+- **Tagesverlust-Limit:** ab -2 % realisiertem Verlust (UTC-Tag) keine neuen Trades.
+- **Schutzschalter:** 4 Stops in 2h → 2h Pause, 5 % Drawdown in 24h → 12h Pause.
+- Alle Werte in `user_data/daytrade-risk.json`, nach Änderung `./daytrade.sh start`.
+
+Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Hauptbot bleibt unberührt. Telegram ist aus, weil ein Telegram-Token nur von einem Bot genutzt werden kann (für den Daytrader einen zweiten Bot bei @BotFather anlegen).
+
+| Befehl | Was es macht |
+|---|---|
+| `./daytrade.sh start` | starten (Testmodus) |
+| `./daytrade.sh status` | Container und letzte Logzeilen |
+| `./daytrade.sh kill` | **Kill-Switch:** keine neuen Trades, offene werden verkauft |
+| `./daytrade.sh unkill` | Kill-Switch aus |
+| `./daytrade.sh stop` | Container anhalten |
+| `./daytrade.sh backtest 30` | Backtest über die letzten 30 Tage |
+
+Echtgeld: in `.env.daytrade` die Binance-Keys eintragen und `FREQTRADE__DRY_RUN=false` setzen, dann `./daytrade.sh start`. Erst nach einer sauberen Testphase.

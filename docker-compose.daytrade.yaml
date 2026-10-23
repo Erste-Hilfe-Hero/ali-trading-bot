@@ -1,0 +1,16 @@
+# Zweiter Bot: Daytrader. Laeuft neben dem bestehenden Bot, eigener Container und eigene Datenbank.
+# Start: ./daytrade.sh start
+name: ali-daytrade
+services:
+  daytrade:
+    image: freqtradeorg/freqtrade:stable
+    container_name: ali-daytrade
+    restart: unless-stopped
+    env_file: .env.daytrade
+    volumes:
+      - ./user_data:/freqtrade/user_data
+    command: >
+      trade
+      --logfile /freqtrade/user_data/logs/daytrade.log
+      --config /freqtrade/user_data/config-daytrade.json
+      --strategy DaytradeMomentum
