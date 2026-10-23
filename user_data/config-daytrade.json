@@ -58,7 +58,15 @@
       "CRCLB/.*",
       "MSTRB/.*",
       ".*UP/.*",
-      ".*DOWN/.*"
+      ".*DOWN/.*",
+      "EUR/.*",
+      "SKHYB/.*",
+      "NVDAB/.*",
+      "INTCB/.*",
+      "TQQQB/.*",
+      "SNXXB/.*",
+      "AMDB/.*",
+      "MUB/.*"
     ]
   },
   "pairlists": [
@@ -90,5 +98,6 @@
   "internals": {
     "process_throttle_secs": 5
   },
-  "db_url": "sqlite:////freqtrade/user_data/tradesv3-daytrade.sqlite"
+  "db_url": "sqlite:////freqtrade/user_data/tradesv3-daytrade.sqlite",
+  "initial_state": "running"
 }

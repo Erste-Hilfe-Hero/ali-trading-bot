@@ -71,7 +71,7 @@ Handelt dieselben Coins wie der Hauptbot (Top 50 nach Volumen, gleiche Filter un
 
 Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstrend ist und BTC auf 15m nicht fällt, und zwar wenn auf 5m EMA9 über EMA21 kreuzt, der Kurs über dem Tages-VWAP liegt und das Volumen erhöht ist.
 
-- **Stop:** 1,5 × ATR unter Einstieg, auf Binance platziert. Ab +1R wird der Stop auf Einstand gezogen.
+- **Stop:** 1,5 × ATR unter Einstieg, auf Binance platziert. Ab +1,5R wird der Stop auf +0,5R nachgezogen.
 - **Ziel:** 3 × ATR (Chance/Risiko 1:2). Spätestens nach 3 Stunden wird verkauft.
 - **Positionsgröße:** so berechnet, dass ein Stop 0,5 % des Kapitals kostet, max. 25 % des Kapitals pro Trade.
 - **Tagesverlust-Limit:** ab -2 % realisiertem Verlust (UTC-Tag) keine neuen Trades.

@@ -168,10 +168,11 @@ class DaytradeMomentum(IStrategy):
         atr = self._entry_atr(pair, trade)
         if not atr:
             return None
-        stop_price = trade.open_rate - atr * self.risk["atr_stop_mult"]
-        # Ab +1R den Stop auf Einstand ziehen
-        if current_rate >= trade.open_rate + atr * self.risk["atr_stop_mult"]:
-            stop_price = trade.open_rate * 1.002
+        r = atr * self.risk["atr_stop_mult"]
+        stop_price = trade.open_rate - r
+        # Ab +1,5R einen halben R Gewinn sichern (Einstand allein frisst die Gebuehren)
+        if current_rate >= trade.open_rate + 1.5 * r:
+            stop_price = trade.open_rate + 0.5 * r
         return stoploss_from_absolute(stop_price, current_rate, is_short=False, leverage=trade.leverage)
 
     def custom_exit(self, pair: str, trade: Trade, current_time: datetime,
