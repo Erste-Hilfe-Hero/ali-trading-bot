@@ -69,6 +69,12 @@ last_profit() {
     "from freqtrade.data.btanalysis import load_backtest_stats as l; print(l('$UD/backtest_results')['strategy']['$1']['profit_total'])"
 }
 
+# Trades pro Tag im letzten Backtest einer Strategie
+last_trades_per_day() {
+  docker run --rm -v "$PWD/user_data:$UD" --entrypoint python3 "$FT_IMG" -c \
+    "from freqtrade.data.btanalysis import load_backtest_stats as l; s=l('$UD/backtest_results')['strategy']['$1']; print(round(s['total_trades'] / max(s['backtest_days'], 1), 1))"
+}
+
 bt() {  # bt <strategie> <timerange> [extra args]
   local st="$1" tr="$2"; shift 2
   $RUN backtesting $BT_CFG --strategy "$st" --timerange "$tr" --cache none "$@" 2>&1 | grep -vE " - INFO - |━━" | tail -45
@@ -79,7 +85,7 @@ rank() {  # rank <tage>: testet alle Strategien, setzt BEST/BESTP/PCUR
   local days="$1" tr st p
   download "$days"; tr="$(date -u -d "-${days} days" +%Y%m%d)-"; BEST=""; BESTP=-9; PCUR=-9
   for st in $STRATEGIES; do
-    bt "$st" "$tr" >/dev/null; p=$(last_profit "$st"); echo "$st: $p"
+    bt "$st" "$tr" >/dev/null; p=$(last_profit "$st"); echo "$st: $p  Trades/Tag: $(last_trades_per_day "$st")"
     if python3 -c "import sys; sys.exit(0 if $p > $BESTP else 1)"; then BEST=$st; BESTP=$p; fi
     [ "$st" = "$STRATEGY" ] && PCUR=$p
   done
