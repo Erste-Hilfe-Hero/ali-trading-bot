@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Daytrader steuern:
 #   start | stop | kill | unkill | status | logs | report
-#   backtest [tage] [strategie] | select [tage] | check [tage]
+#   backtest [tage] [strategie] | select [tage] | suggest [tage] | use <strategie> | check [tage]
 #   hyperopt [tage] [epochen] | apply-params | learn [tage] [epochen]
 #   paper | live
 set -euo pipefail
@@ -75,6 +75,16 @@ bt() {  # bt <strategie> <timerange> [extra args]
   echo "ERGEBNIS $st: $(last_profit "$st")"
 }
 
+rank() {  # rank <tage>: testet alle Strategien, setzt BEST/BESTP/PCUR
+  local days="$1" tr st p
+  download "$days"; tr="$(date -u -d "-${days} days" +%Y%m%d)-"; BEST=""; BESTP=-9; PCUR=-9
+  for st in $STRATEGIES; do
+    bt "$st" "$tr" >/dev/null; p=$(last_profit "$st"); echo "$st: $p"
+    if python3 -c "import sys; sys.exit(0 if $p > $BESTP else 1)"; then BEST=$st; BESTP=$p; fi
+    [ "$st" = "$STRATEGY" ] && PCUR=$p
+  done
+}
+
 mode() { [ "$(get_env FREQTRADE__DRY_RUN)" = "false" ] && echo "ECHTGELD" || echo "TESTMODUS"; }
 
 case "${1:-status}" in
@@ -87,7 +97,8 @@ case "${1:-status}" in
   status) $DC ps; echo "Modus: $(mode)  Strategie: $STRATEGY"; tail -n 30 user_data/logs/daytrade.log 2>/dev/null || true ;;
   logs)   $DC logs -f --tail 100 ;;
   report)
-    echo "Modus: $(mode)"; [ -f user_data/KILL ] && echo "Kill-Switch: AKTIV"
+    echo "Modus: $(mode)  Strategie: $STRATEGY"; [ -f user_data/KILL ] && echo "Kill-Switch: AKTIV"
+    [ -f user_data/daytrade-suggestion.txt ] && echo "VORSCHLAG: $(cat user_data/daytrade-suggestion.txt)"
     echo "== Gewinn gesamt";   api profit | python3 -m json.tool
     echo "== Letzte 7 Tage";   api "daily?timescale=7" | python3 -m json.tool
     echo "== Offene Trades";   api status | python3 -m json.tool
@@ -96,14 +107,23 @@ case "${1:-status}" in
     DAYS="${2:-30}"; ST="${3:-$STRATEGY}"; ensure_env; download "$DAYS"
     bt "$ST" "$(date -u -d "-${DAYS} days" +%Y%m%d)-" --breakdown day ;;
   select)
-    # Testet alle Strategien und merkt sich die beste (aktiv nach dem naechsten start)
-    DAYS="${2:-30}"; ensure_env; download "$DAYS"
-    TR="$(date -u -d "-${DAYS} days" +%Y%m%d)-"; BEST=""; BESTP=-9
-    for st in $STRATEGIES; do
-      bt "$st" "$TR" >/dev/null; P=$(last_profit "$st"); echo "$st: $P"
-      if python3 -c "import sys; sys.exit(0 if $P > $BESTP else 1)"; then BEST=$st; BESTP=$P; fi
-    done
-    echo "$BEST" > "$STRAT_FILE"; echo "BESTE=$BEST GEWINN=$BESTP" ;;
+    # Nur Rangliste, aendert nichts
+    ensure_env; rank "${2:-30}"; echo "BESTE=$BEST GEWINN=$BESTP AKTIV=$STRATEGY GEWINN=$PCUR" ;;
+  suggest)
+    # Prueft alle Strategien und schreibt einen Vorschlag, wenn die beste im Plus und mindestens
+    # 1 Prozentpunkt besser als die aktive ist. Gewechselt wird erst nach Alis Bestaetigung (use).
+    ensure_env; rank "${2:-30}"
+    MSG="$(date -u +%F) aktiv=$STRATEGY ($PCUR) beste=$BEST ($BESTP)"
+    if [ "$BEST" != "$STRATEGY" ] && python3 -c "import sys; sys.exit(0 if $BESTP > max($PCUR, 0) + 0.01 else 1)"; then
+      echo "$MSG" > user_data/daytrade-suggestion.txt; echo "VORSCHLAG: $MSG" | tee -a user_data/logs/learn.log
+    else
+      rm -f user_data/daytrade-suggestion.txt; echo "kein Wechsel: $MSG" | tee -a user_data/logs/learn.log
+    fi ;;
+  use)
+    # use <strategie>: wechselt die aktive Strategie (nach Alis Bestaetigung), Modus bleibt
+    case " $STRATEGIES " in *" ${2:-} "*) ;; *) echo "Unbekannte Strategie: ${2:-}"; exit 1 ;; esac
+    echo "$2" > "$STRAT_FILE"; export DT_STRATEGY="$2"; rm -f user_data/daytrade-suggestion.txt
+    $DC up -d --force-recreate; echo "Modus: $(mode)  Strategie: $2" ;;
   hyperopt)
     # Optimiert auf den ersten 2/3 des Zeitraums, prueft danach auf dem letzten Drittel,
     # das der Optimierer nie gesehen hat. Ergebnis wird nur ein Vorschlag (apply-params).
