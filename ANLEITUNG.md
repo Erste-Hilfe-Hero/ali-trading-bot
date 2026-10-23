@@ -78,7 +78,7 @@ Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstren
 - **Schutzschalter:** 4 Stops in 2h → 2h Pause, 5 % Drawdown in 24h → 12h Pause.
 - Alle Werte in `user_data/daytrade-risk.json`, nach Änderung `./daytrade.sh start`.
 
-**Strategien:** `DaytradeConfluence` (Standard: jeder Einstieg prüft 9 Signale, Einsatz je nach Signalstärke 0,7x bis 1,3x), `DaytradeMomentum`, `DaytradeMeanRevert`. Die aktive steht in `user_data/daytrade-strategy.txt`. Bis 10 Trades gleichzeitig, bis 50 pro Tag.
+**Strategien (13, alle mit denselben Risikogrenzen und Kill-Switch):** `DaytradeMomentum` (live seit 2026-10-23, mit 6 Zusatz-Werkzeugen MACD, OBV, MFI, 1h-RSI, Bollinger, Stoch-RSI, die `learn` nur einschaltet, wenn sie auf ungesehenen Daten helfen), `DaytradeConfluence` (9 Signale), `DaytradeMeanRevert`, `DaytradeBreakout`, `DaytradeTrend15m`, `DaytradeRsi2`, `DaytradeVwapBounce`, `DaytradeSqueeze`, `DaytradeMacdCross`, `DaytradeSupertrend`, `DaytradeHeikinAshi`, `DaytradeStochRsi`, `DaytradeEmaRibbon`. Die aktive steht in `user_data/daytrade-strategy.txt`. Bis 10 Trades gleichzeitig, bis 50 pro Tag.
 
 Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Hauptbot bleibt unberührt.
 

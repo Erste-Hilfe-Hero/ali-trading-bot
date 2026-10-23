@@ -23,9 +23,10 @@ from pathlib import Path
 import talib.abstract as ta
 from pandas import DataFrame
 
+from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.persistence import Trade
-from freqtrade.strategy import (DecimalParameter, IntParameter, IStrategy, informative,
-                                stoploss_from_absolute)
+from freqtrade.strategy import (BooleanParameter, DecimalParameter, IntParameter, IStrategy,
+                                informative, stoploss_from_absolute)
 
 logger = logging.getLogger(__name__)
 
@@ -74,6 +75,13 @@ class DaytradeMomentum(IStrategy):
     rsi_low = IntParameter(40, 60, default=50, space="buy")
     rsi_high = IntParameter(60, 80, default=70, space="buy")
     vol_factor = DecimalParameter(1.0, 2.5, default=1.3, decimals=1, space="buy")
+    # Zusatz-Werkzeuge: aus, bis das Selbstlernen (learn) zeigt, dass sie auf ungesehenen Daten helfen
+    use_macd = BooleanParameter(default=False, space="buy")      # MACD-Histogramm steigt
+    use_obv = BooleanParameter(default=False, space="buy")       # Kaufvolumen (OBV) ueber seinem Schnitt
+    use_mfi = BooleanParameter(default=False, space="buy")       # Geldfluss (MFI) > 50
+    use_rsi_1h = BooleanParameter(default=False, space="buy")    # 1h-RSI > 50
+    use_not_stretched = BooleanParameter(default=False, space="buy")  # Kurs noch unter oberem Bollinger-Band
+    use_stoch = BooleanParameter(default=False, space="buy")     # Stoch-RSI K ueber D
 
     @property
     def protections(self):
@@ -103,6 +111,7 @@ class DaytradeMomentum(IStrategy):
     def populate_indicators_1h(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe["ema50"] = ta.EMA(dataframe, timeperiod=50)
         dataframe["ema200"] = ta.EMA(dataframe, timeperiod=200)
+        dataframe["rsi"] = ta.RSI(dataframe, timeperiod=14)
         return dataframe
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -113,6 +122,14 @@ class DaytradeMomentum(IStrategy):
         dataframe["adx"] = ta.ADX(dataframe, timeperiod=14)
         dataframe["atr"] = ta.ATR(dataframe, timeperiod=14)
         dataframe["vol_avg"] = dataframe["volume"].rolling(30).mean()
+        dataframe["m_macd_hist"] = ta.MACD(dataframe)["macdhist"]
+        dataframe["m_obv"] = ta.OBV(dataframe)
+        dataframe["m_obv_ema"] = ta.EMA(dataframe["m_obv"], timeperiod=20)
+        dataframe["m_mfi"] = ta.MFI(dataframe, timeperiod=14)
+        dataframe["m_bb_upper"] = dataframe["close"].rolling(20).mean() + 2 * dataframe["close"].rolling(20).std()
+        stoch = ta.STOCHRSI(dataframe, timeperiod=14, fastk_period=3, fastd_period=3)
+        dataframe["m_stoch_k"] = stoch["fastk"]
+        dataframe["m_stoch_d"] = stoch["fastd"]
 
         # VWAP, jeden UTC-Tag neu
         day = dataframe["date"].dt.floor("D")
@@ -137,8 +154,22 @@ class DaytradeMomentum(IStrategy):
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         cross_up = (dataframe["ema9"] > dataframe["ema21"]) & (
             dataframe["ema9"].shift(1) <= dataframe["ema21"].shift(1))
+        extra = dataframe["close"] > 0
+        if self.use_macd.value:
+            extra &= dataframe["m_macd_hist"] > dataframe["m_macd_hist"].shift(1)
+        if self.use_obv.value:
+            extra &= dataframe["m_obv"] > dataframe["m_obv_ema"]
+        if self.use_mfi.value:
+            extra &= dataframe["m_mfi"] > 50
+        if self.use_rsi_1h.value:
+            extra &= dataframe["rsi_1h"] > 50
+        if self.use_not_stretched.value:
+            extra &= dataframe["close"] < dataframe["m_bb_upper"]
+        if self.use_stoch.value:
+            extra &= dataframe["m_stoch_k"] > dataframe["m_stoch_d"]
         dataframe.loc[
-            (dataframe["ema50_1h"] > dataframe["ema200_1h"])
+            extra
+            & (dataframe["ema50_1h"] > dataframe["ema200_1h"])
             & (dataframe["close_1h"] > dataframe["ema50_1h"])
             & (dataframe["btc_ok"] == 1)
             & cross_up
@@ -163,7 +194,7 @@ class DaytradeMomentum(IStrategy):
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df.empty:
             return None
-        signal_time = trade.open_date_utc - timedelta(minutes=5)
+        signal_time = trade.open_date_utc - timedelta(minutes=timeframe_to_minutes(self.timeframe))
         rows = df.loc[df["date"] <= signal_time]
         if rows.empty:
             return None
