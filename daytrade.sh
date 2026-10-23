@@ -87,7 +87,7 @@ rank() {  # rank <tage>: testet alle Strategien, setzt BEST/BESTP/PCUR
   for st in $STRATEGIES; do
     bt "$st" "$tr" >/dev/null; p=$(last_profit "$st"); echo "$st: $p  Trades/Tag: $(last_trades_per_day "$st")"
     if python3 -c "import sys; sys.exit(0 if $p > $BESTP else 1)"; then BEST=$st; BESTP=$p; fi
-    [ "$st" = "$STRATEGY" ] && PCUR=$p
+    if [ "$st" = "$STRATEGY" ]; then PCUR=$p; fi
   done
 }
 
