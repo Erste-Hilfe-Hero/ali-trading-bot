@@ -78,15 +78,28 @@ Strategie **DaytradeMomentum**: kauft nur, wenn der Coin auf 1h im Aufwärtstren
 - **Schutzschalter:** 4 Stops in 2h → 2h Pause, 5 % Drawdown in 24h → 12h Pause.
 - Alle Werte in `user_data/daytrade-risk.json`, nach Änderung `./daytrade.sh start`.
 
-Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Hauptbot bleibt unberührt. Telegram ist aus, weil ein Telegram-Token nur von einem Bot genutzt werden kann (für den Daytrader einen zweiten Bot bei @BotFather anlegen).
+Läuft in einem eigenen Container (`ali-daytrade`) mit eigener Datenbank, der Hauptbot bleibt unberührt.
 
+### Werkzeuge
 | Befehl | Was es macht |
 |---|---|
-| `./daytrade.sh start` | starten (Testmodus) |
-| `./daytrade.sh status` | Container und letzte Logzeilen |
+| `./daytrade.sh start` | starten (Testmodus, solange nicht `live`) |
+| `./daytrade.sh status` | Container, Modus und letzte Logzeilen |
+| `./daytrade.sh report` | Gewinn gesamt, letzte 7 Tage, offene Trades, Kontostand |
 | `./daytrade.sh kill` | **Kill-Switch:** keine neuen Trades, offene werden verkauft |
 | `./daytrade.sh unkill` | Kill-Switch aus |
 | `./daytrade.sh stop` | Container anhalten |
-| `./daytrade.sh backtest 30` | Backtest über die letzten 30 Tage |
+| `./daytrade.sh backtest 60` | Backtest über die letzten 60 Tage |
+| `./daytrade.sh check` | prüft die Strategie auf Lookahead-Fehler |
+| `./daytrade.sh hyperopt 90 300` | optimiert die Einstiegsfilter auf 2/3 der Daten, testet auf dem letzten Drittel, speichert nur einen Vorschlag |
+| `./daytrade.sh apply-params` | Vorschlag übernehmen (danach `start`) |
+| `./daytrade.sh paper` | zurück in den Testmodus |
+| `./daytrade.sh live` | **Echtgeld:** übernimmt den Binance-Key aus der `.env` des Hauptbots |
 
-Echtgeld: in `.env.daytrade` die Binance-Keys eintragen und `FREQTRADE__DRY_RUN=false` setzen, dann `./daytrade.sh start`. Erst nach einer sauberen Testphase.
+**Web-Dashboard (FreqUI):** läuft nur lokal auf dem Server, Port 18081. Vom eigenen Rechner: `ssh -L 18081:127.0.0.1:18081 <server>`, dann http://localhost:18081 öffnen. Benutzer `ali`, Passwort steht in `.env.daytrade` (`FREQTRADE__API_SERVER__PASSWORD`).
+
+**Telegram:** braucht einen eigenen Bot (ein Token kann nur ein Bot nutzen). Bei @BotFather `/newbot`, Token als GitHub-Secret `TG_TOKEN_DAYTRADE` speichern, dann den Workflow mit `start` laufen lassen. Danach gehen `/status`, `/profit`, `/daily`, `/stopentry`, `/forceexit all`.
+
+**Über GitHub (Handy):** Workflow "Ali Daytrader" im Repo lifekit-ki-site, Aktion auswählen (`report`, `kill`, `start`, `backtest`, `hyperopt`, `live` usw.). Jeden Morgen um 7 Uhr (UTC) läuft automatisch ein `report`.
+
+Echtgeld nur nach einer sauberen Testphase. Mit nur einem kleinen Konto darf nur ein Bot live handeln: vor `live` den Hauptbot in den Testmodus stellen.

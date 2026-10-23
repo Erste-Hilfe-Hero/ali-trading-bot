@@ -7,3 +7,4 @@ user_data/hyperopt_results/
 __pycache__/
 .env.daytrade
 user_data/KILL
+user_data/strategies/*.json*

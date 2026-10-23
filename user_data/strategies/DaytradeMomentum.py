@@ -24,7 +24,8 @@ import talib.abstract as ta
 from pandas import DataFrame
 
 from freqtrade.persistence import Trade
-from freqtrade.strategy import IStrategy, informative, stoploss_from_absolute
+from freqtrade.strategy import (DecimalParameter, IntParameter, IStrategy, informative,
+                                stoploss_from_absolute)
 
 logger = logging.getLogger(__name__)
 
@@ -67,6 +68,12 @@ class DaytradeMomentum(IStrategy):
         "stoploss_on_exchange": True,
         "stoploss_on_exchange_interval": 60,
     }
+
+    # Einstiegsfilter, per ./daytrade.sh hyperopt optimierbar
+    adx_min = IntParameter(15, 35, default=20, space="buy")
+    rsi_low = IntParameter(40, 60, default=50, space="buy")
+    rsi_high = IntParameter(60, 80, default=70, space="buy")
+    vol_factor = DecimalParameter(1.0, 2.5, default=1.3, decimals=1, space="buy")
 
     @property
     def protections(self):
@@ -137,9 +144,9 @@ class DaytradeMomentum(IStrategy):
             & cross_up
             & (dataframe["close"] > dataframe["vwap"])
             & (dataframe["close"] > dataframe["ema50"])
-            & (dataframe["adx"] > 20)
-            & (dataframe["rsi"].between(50, 70))
-            & (dataframe["volume"] > dataframe["vol_avg"] * 1.3)
+            & (dataframe["adx"] > self.adx_min.value)
+            & (dataframe["rsi"].between(self.rsi_low.value, self.rsi_high.value))
+            & (dataframe["volume"] > dataframe["vol_avg"] * self.vol_factor.value)
             & (dataframe["atr"] / dataframe["close"] > 0.002),
             "enter_long",
         ] = 1
