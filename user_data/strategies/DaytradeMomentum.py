@@ -17,6 +17,7 @@
 
 import json
 import logging
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -27,6 +28,9 @@ from freqtrade.exchange import timeframe_to_minutes
 from freqtrade.persistence import Trade
 from freqtrade.strategy import (BooleanParameter, DecimalParameter, IntParameter, IStrategy,
                                 informative, stoploss_from_absolute)
+
+sys.path.append(str(Path(__file__).parent))
+from market_guard import MarketGuard  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -82,6 +86,11 @@ class DaytradeMomentum(IStrategy):
     use_rsi_1h = BooleanParameter(default=False, space="buy")    # 1h-RSI > 50
     use_not_stretched = BooleanParameter(default=False, space="buy")  # Kurs noch unter oberem Bollinger-Band
     use_stoch = BooleanParameter(default=False, space="buy")     # Stoch-RSI K ueber D
+    # Markt-Waechter wie bei Profi-Daytradern; Unterklassen schalten sie ein (0/None = aus)
+    guard_fng_min = 0          # kein Kauf, wenn Fear & Greed (Vortag) darunter liegt
+    guard_btc_trend = False    # kein Kauf, wenn BTC auf 15m unter seiner EMA50 liegt
+    guard_btc_crash = 0.0      # kein Kauf, wenn BTC in der letzten Stunde mehr als so viel gefallen ist
+    guard_hours = None         # (von, bis) in UTC: nur zu aktiven Handelszeiten kaufen
 
     @property
     def protections(self):
@@ -103,6 +112,11 @@ class DaytradeMomentum(IStrategy):
         if RISK_FILE.exists():
             self.risk.update(json.loads(RISK_FILE.read_text()))
         logger.info("DaytradeMomentum: Risiko-Einstellungen %s", self.risk)
+        self.live = self.config["runmode"].value in ("live", "dry_run")
+        self.guard = MarketGuard(self.live)
+        if self.guard_fng_min:
+            self.guard.load_fng()
+        self._journal_day = None
 
     def informative_pairs(self):
         return [("BTC/USDT", "15m")]
@@ -143,12 +157,15 @@ class DaytradeMomentum(IStrategy):
             if not btc.empty:
                 btc["btc_ema50"] = ta.EMA(btc, timeperiod=50)
                 btc["btc_ok"] = (btc["close"] > btc["btc_ema50"]).astype(int)
+                btc["btc_chg1h"] = btc["close"] / btc["close"].shift(4) - 1
                 # 15m-Kerze erst nach ihrem Schluss verwenden
                 btc["date"] = btc["date"] + timedelta(minutes=15)
-                dataframe = dataframe.merge(btc[["date", "btc_ok"]], on="date", how="left")
+                dataframe = dataframe.merge(btc[["date", "btc_ok", "btc_chg1h"]], on="date", how="left")
                 dataframe["btc_ok"] = dataframe["btc_ok"].ffill().fillna(0)
+                dataframe["btc_chg1h"] = dataframe["btc_chg1h"].ffill().fillna(0)
         if "btc_ok" not in dataframe:
             dataframe["btc_ok"] = 1
+            dataframe["btc_chg1h"] = 0.0
         return dataframe
 
     def populate_entry_trend(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
@@ -264,5 +281,33 @@ class DaytradeMomentum(IStrategy):
         if count >= self.risk["max_trades_per_day"]:
             logger.info("Max. Trades pro Tag erreicht, kein Einstieg in %s", pair)
             return False
+        if self.guard_hours and not (self.guard_hours[0] <= current_time.hour < self.guard_hours[1]):
+            return False
+        if self.guard_btc_trend or self.guard_btc_crash:
+            df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
+            if not df.empty:
+                last = df.iloc[-1]
+                if self.guard_btc_trend and last["btc_ok"] != 1:
+                    return False
+                if self.guard_btc_crash and last["btc_chg1h"] < -self.guard_btc_crash:
+                    return False
+        if self.guard.block_reason(pair, current_time, self.guard_fng_min):
+            return False
         return True
+
+    def bot_loop_start(self, current_time: datetime, **kwargs) -> None:
+        # Trade-Tagebuch: jeden Abend 19 UTC (21 Uhr deutsche Sommerzeit) per Telegram
+        if not self.live or current_time.hour != 19 or self._journal_day == current_time.date():
+            return
+        self._journal_day = current_time.date()
+        start = current_time.replace(hour=0, minute=0, second=0, microsecond=0)
+        trades = Trade.get_trades_proxy(is_open=False, close_date=start)
+        lines = [f"Tagebuch {current_time:%d.%m.} ({self.__class__.__name__})"]
+        for t in trades:
+            lines.append(f"{t.pair} {t.open_date_utc:%H:%M}-{t.close_date_utc:%H:%M} "
+                         f"{(t.close_profit or 0) * 100:+.2f}% ({t.close_profit_abs or 0:+.2f} $) {t.exit_reason}")
+        total = sum(t.close_profit_abs or 0 for t in trades)
+        wins = sum(1 for t in trades if (t.close_profit_abs or 0) > 0)
+        lines.append(f"{len(trades)} Trades, {wins} im Plus, gesamt {total:+.2f} $")
+        self.dp.send_msg("\n".join(lines), always_send=True)
 
