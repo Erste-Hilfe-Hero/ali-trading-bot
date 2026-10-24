@@ -1,7 +1,7 @@
 {
-  "news": false,
+  "news": true,
   "news_block_hours": 6,
-  "macro": false,
+  "macro": true,
   "macro_before_min": 30,
   "macro_after_min": 60
 }
