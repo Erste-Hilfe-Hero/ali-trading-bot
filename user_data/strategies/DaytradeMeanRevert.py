@@ -16,6 +16,7 @@ class DaytradeMeanRevert(DaytradeMomentum):
     # Risiko, Positionsgroesse, Tageslimit und Kill-Switch kommen aus DaytradeMomentum.
     bb_dev = DecimalParameter(1.8, 2.8, default=2.2, decimals=1, space="buy")
     rsi_max_entry = IntParameter(20, 38, default=30, space="buy")
+    min_gap = 0.006
 
     def populate_indicators(self, dataframe: DataFrame, metadata: dict) -> DataFrame:
         dataframe = super().populate_indicators(dataframe, metadata)
@@ -31,7 +32,7 @@ class DaytradeMeanRevert(DaytradeMomentum):
             & (dataframe["rsi"] < self.rsi_max_entry.value)
             & (dataframe["volume"] > 0)
             # genug Abstand zur Mitte, damit sich der Trade nach Gebuehren lohnt
-            & ((dataframe["bb_mid"] - dataframe["close"]) / dataframe["close"] > 0.006),
+            & ((dataframe["bb_mid"] - dataframe["close"]) / dataframe["close"] > self.min_gap),
             "enter_long",
         ] = 1
         return dataframe
