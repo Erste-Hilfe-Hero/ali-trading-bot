@@ -135,14 +135,15 @@ case "${1:-status}" in
   hyperopt)
     # Optimiert auf den ersten 2/3 des Zeitraums, prueft danach auf dem letzten Drittel,
     # das der Optimierer nie gesehen hat. Ergebnis wird nur ein Vorschlag (apply-params).
-    DAYS="${2:-90}"; EPOCHS="${3:-300}"; ensure_env; download "$DAYS"
+    # hyperopt [tage] [epochen] [strategie]: ohne Strategie die aktive
+    DAYS="${2:-90}"; EPOCHS="${3:-300}"; ST="${4:-$STRATEGY}"; PARAMS="user_data/strategies/$ST.json"; ensure_env; download "$DAYS"
     START=$(date -u -d "-${DAYS} days" +%Y%m%d)
     SPLIT=$(date -u -d "-$((DAYS / 3)) days" +%Y%m%d)
     [ -f "$PARAMS" ] && mv "$PARAMS" "$PARAMS.active"
-    $RUN hyperopt $BT_CFG --strategy "$STRATEGY" --spaces buy --hyperopt-loss SharpeHyperOptLossDaily \
+    $RUN hyperopt $BT_CFG --strategy "$ST" --spaces buy --hyperopt-loss SharpeHyperOptLossDaily \
       -e "$EPOCHS" --timerange "${START}-${SPLIT}" -j 2
     echo "== Test auf ungesehenen Daten (${SPLIT} bis heute)"
-    bt "$STRATEGY" "${SPLIT}-"
+    bt "$ST" "${SPLIT}-"
     [ -f "$PARAMS" ] && mv "$PARAMS" "$PARAMS.candidate"
     [ -f "$PARAMS.active" ] && mv "$PARAMS.active" "$PARAMS"
     echo "Vorschlag gespeichert in $PARAMS.candidate. Uebernehmen mit: $0 apply-params" ;;
