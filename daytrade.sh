@@ -59,8 +59,10 @@ api() {
 
 download() {
   local days="$1"
-  docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" download-data $BT_CFG -t 1m 5m 15m 1h \
-    --timerange "$(date -u -d "-$((days + 3)) days" +%Y%m%d)-"
+  local tr="$(date -u -d "-$((days + 3)) days" +%Y%m%d)-"
+  # --prepend holt aeltere Daten nach (ohne laedt freqtrade nur neue Kerzen an vorhandene an)
+  docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" download-data $BT_CFG -t 1m 5m 15m 1h --timerange "$tr" --prepend
+  docker run --rm -v "$PWD/user_data:$UD" "$FT_IMG" download-data $BT_CFG -t 1m 5m 15m 1h --timerange "$tr"
 }
 
 # Gesamtgewinn (Anteil) des letzten Backtests einer Strategie
