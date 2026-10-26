@@ -91,6 +91,11 @@ class DaytradeMomentum(IStrategy):
     guard_btc_trend = False    # kein Kauf, wenn BTC auf 15m unter seiner EMA50 liegt
     guard_btc_crash = 0.0      # kein Kauf, wenn BTC in der letzten Stunde mehr als so viel gefallen ist
     guard_hours = None         # (von, bis) in UTC: nur zu aktiven Handelszeiten kaufen
+    # Stop/Ziel/Haltezeit je Strategie (None = Wert aus daytrade-risk.json); das Risiko pro Trade bleibt gleich,
+    # weil die Positionsgroesse sich nach dem Stop-Abstand richtet
+    stop_mult = None
+    target_mult = None
+    hold_minutes = None
 
     @property
     def protections(self):
@@ -207,6 +212,11 @@ class DaytradeMomentum(IStrategy):
         ] = 1
         return dataframe
 
+    def _rp(self, key: str) -> float:
+        own = {"atr_stop_mult": self.stop_mult, "atr_target_mult": self.target_mult,
+               "max_trade_minutes": self.hold_minutes}[key]
+        return self.risk[key] if own is None else own
+
     def _entry_atr(self, pair: str, trade: Trade) -> float | None:
         df, _ = self.dp.get_analyzed_dataframe(pair, self.timeframe)
         if df.empty:
@@ -223,7 +233,7 @@ class DaytradeMomentum(IStrategy):
         atr = self._entry_atr(pair, trade)
         if not atr:
             return None
-        r = atr * self.risk["atr_stop_mult"]
+        r = atr * self._rp("atr_stop_mult")
         stop_price = trade.open_rate - r
         # Ab +1,5R einen halben R Gewinn sichern (Einstand allein frisst die Gebuehren)
         if current_rate >= trade.open_rate + 1.5 * r:
@@ -235,9 +245,9 @@ class DaytradeMomentum(IStrategy):
         if KILL_FILE.exists():
             return "kill_switch"
         atr = self._entry_atr(pair, trade)
-        if atr and current_rate >= trade.open_rate + atr * self.risk["atr_target_mult"]:
+        if atr and current_rate >= trade.open_rate + atr * self._rp("atr_target_mult"):
             return "atr_target"
-        if current_time - trade.open_date_utc > timedelta(minutes=self.risk["max_trade_minutes"]):
+        if current_time - trade.open_date_utc > timedelta(minutes=self._rp("max_trade_minutes")):
             return "time_exit"
         return None
 
@@ -249,7 +259,7 @@ class DaytradeMomentum(IStrategy):
         if df.empty:
             return 0
         atr = float(df["atr"].iloc[-1])
-        stop_dist = atr * self.risk["atr_stop_mult"] / current_rate
+        stop_dist = atr * self._rp("atr_stop_mult") / current_rate
         capital = self.wallets.get_total_stake_amount()
         stake = capital * self.risk["risk_per_trade"] / max(stop_dist, 0.003)
         stake = min(stake, capital * self.risk["max_stake_ratio"], max_stake)
