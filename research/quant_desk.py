@@ -51,7 +51,7 @@ def klines(sym):
             break
     df = pd.DataFrame([r[:6] for r in rows], columns=["t", "o", "h", "l", "c", "v"]).astype(float)
     df.index = pd.to_datetime(df.pop("t"), unit="ms")
-    df = df[df.index < pd.Timestamp.utcnow().tz_localize(None).floor("h")]
+    df = df[df.index < pd.Timestamp.now("UTC").tz_localize(None).floor("h")]
     df.to_csv(path)
     return df
 
@@ -360,7 +360,7 @@ def main():
             reg[rg] = dict(n=len(x), sum=(x.r * x.w).sum(), pf=g / l if l > 0 else (9.99 if g > 0 else 0))
         sc, parts = score(full, oos, reg)
         keep = sc >= 18 and full["pf"] > 1.3 and full["dd"] > -0.2 and full["n"] >= 100
-        results.append((name, p, sc, keep))
+        results.append((name, p, sc, keep, R))
         print(f"\n## {name}  | Gitter {len(rows)} Varianten, davon {oos_pos} mit OOS-PF>1")
         print(f"   gewaehlt (nur In-Sample): {p}")
         for lab, s in [("In-Sample 2020-09..2023", ins), ("Out-of-Sample 2024..heute", oos), ("Gesamt", full)]:
@@ -370,14 +370,30 @@ def main():
         print("   je Coin: " + " | ".join(f"{c} {len(g)} Tr PF {g.r[g.r>0].sum()/max(-g.r[g.r<0].sum(),1e-9):.2f}" for c, g in t.groupby("coin")))
         yr = (1 + R).groupby(R.index.year).prod() - 1
         print("   je Jahr: " + " | ".join(f"{y} {v:+.0%}" for y, v in yr.items()))
+        f = min(1.0, 0.2 / max(-full["dd"], 1e-9))
+        fs, fo = stats([], R * f), stats([], R * f, lo=SPLIT)
+        l12 = stats([], R, lo=R.index[-1] - pd.Timedelta(days=365))
+        print(f"   letzte 12 Monate: {l12['ret']:+.1%} (DD {l12['dd']:.1%})")
+        print(f"   Einsatz fuer max DD 20%: {f:.0%} des Kapitals -> CAGR {fs['cagr']:+.1%}, max DD {fs['dd']:.1%}, OOS {fo['ret']:+.1%}")
         print(f"   Score {sc}/25 {parts} -> {'BEHALTEN' if keep else 'verworfen'}")
         top = sorted(rows, key=lambda x: -min(x[3]['pf'], 10))[:3]
         print("   Top-3 im Gitter nach Gesamt-PF (Overfitting-Blick, NICHT gewaehlt): " +
               " ; ".join(f"{x[0]} PF {x[3]['pf']:.2f} OOS {x[2]['pf']:.2f} n {x[3]['n']}" for x in top))
         sys.stdout.flush()
 
+    top = sorted(results, key=lambda x: -x[2])[:3]
+    C = pd.concat([x[4] for x in top], axis=1).fillna(0).mean(axis=1)
+    for lab, lo, hi in [("In-Sample", None, SPLIT), ("Out-of-Sample", SPLIT, None), ("Gesamt", None, None)]:
+        s_ = stats([], C, lo=lo, hi=hi)
+        print(f"\nKombi Top-3 ({', '.join(x[0] for x in top)}) {lab}: Rendite {s_['ret']:+.1%} | CAGR {s_['cagr']:+.1%} | max DD {s_['dd']:.1%} | schlechtester Monat {s_['worst']:+.1%} ({s_['worst_m']})")
+    full = stats([], C)
+    f = min(1.0, 0.2 / max(-full["dd"], 1e-9))
+    fs, fo = stats([], C * f), stats([], C * f, lo=SPLIT)
+    print(f"Kombi mit {f:.0%} Einsatz: CAGR {fs['cagr']:+.1%}, max DD {fs['dd']:.1%}, OOS {fo['ret']:+.1%}")
+    yr = (1 + C * f).groupby(C.index.year).prod() - 1
+    print("Kombi skaliert je Jahr: " + " | ".join(f"{y} {v:+.0%}" for y, v in yr.items()))
     print("\n=== Rangliste ===")
-    for name, p, sc, keep in sorted(results, key=lambda x: -x[2]):
+    for name, p, sc, keep, _ in sorted(results, key=lambda x: -x[2]):
         print(f"{sc:2d}/25 {'BEHALTEN ' if keep else 'verworfen'} {name} {p}")
 
 
